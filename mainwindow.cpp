@@ -29,21 +29,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     updateTableSize();
 }
-//clear matrix and solve
+
+// Clear matrix and solve
 void MainWindow::clearMatrix()
 {
     int rows = ui->tableWidget->rowCount();
     int cols = ui->tableWidget->columnCount();
 
-
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
             QTableWidgetItem* item = ui->tableWidget->item(i, j);
             if (item) {
-                item->setText("0");  //clear each cell
+                item->setText("0");  // Clear each cell
             } else {
                 ui->tableWidget->setItem(i, j, new QTableWidgetItem(""));
-
             }
         }
     }
@@ -74,7 +73,6 @@ void MainWindow::updateTableSize()
             }
         }
     }
-
 }
 
 // Destructor for MainWindow
@@ -87,12 +85,11 @@ MainWindow::~MainWindow()
 void MainWindow::printMatrixToUI(const QVector<QVector<double>>& matrix, const QString& comment) {
     ui->outputTextEdit->append("<b>" + comment + "</b>\n");
 
-    // Print matrix with bold formatting for readability
     for (const auto& row : matrix) {
         QString rowStr = "<i>(";
         int lastColumn = row.size() - 1;
         for (int i = 0; i < row.size(); ++i) {
-            QString numberStr = QString::number((std::abs(row[i]) < 1e-10 ? 0.0 : row[i]), 'f', 2); // 2 decimal precision and avoid "-0"
+            QString numberStr = QString::number((std::abs(row[i]) < 1e-10 ? 0.0 : row[i]), 'f', 2);
             rowStr += numberStr;
             if (i == lastColumn - 1) {
                 rowStr += " | ";
@@ -147,6 +144,15 @@ void MainWindow::gaussianElimination(QVector<QVector<double>>& matrix, QVector<d
             normalizeRow(matrix, i, matrix[i][i]);
         eliminateBelow(matrix, i);                 // Eliminate elements below the pivot
     }
+
+    if (has_NO_Solution(matrix)) {
+        ui->outputTextEdit->append("<b>No solution exists for this matrix.</b>");
+        return;
+    } else if (has_Infinite_Solution(matrix)) {
+        ui->outputTextEdit->append("<b>Infinite solutions exist for this matrix.</b>");
+        return;
+    }
+
     backSubstitution(matrix, solution);            // Perform back substitution
 }
 
@@ -173,17 +179,14 @@ void MainWindow::backSubstitution(QVector<QVector<double>>& matrix, QVector<doub
 
 // Function called when the solve button is clicked
 void MainWindow::on_solveButton_clicked() {
-    // Read input matrix from QTableWidget
     int rows = ui->tableWidget->rowCount();
     int cols = ui->tableWidget->columnCount();
 
-    // Ensure that matrix is at least 2x2
     if (rows < 2 || cols < 2) {
         ui->outputTextEdit->setText("Matrix dimensions must be at least 2x2.");
         return;
     }
 
-    // Parse the input matrix into a QVector
     QVector<QVector<double>> matrix;
     for (int i = 0; i < rows; ++i) {
         QVector<double> row;
@@ -198,31 +201,51 @@ void MainWindow::on_solveButton_clicked() {
         matrix.append(row);
     }
 
-    // Check for empty input
     if (matrix.isEmpty() || matrix[0].isEmpty()) {
         ui->outputTextEdit->setText("Invalid input. Please check your matrix.");
         return;
     }
 
-    // Clear previous output
     ui->outputTextEdit->clear();
-
-    // Print the matrix for debugging purposes
     printMatrixToUI(matrix, "Initial Matrix:");
 
     QVector<double> solution;
-
-    // Perform Gaussian elimination
     gaussianElimination(matrix, solution);
 }
 
 // Find the pivot row for Gaussian elimination
 int MainWindow::findPivotRow(const QVector<QVector<double>>& matrix, int row, int col) {
     int pivotRow = row;
+    double maxAbsVal = std::abs(matrix[row][col]);
+
     for (int i = row + 1; i < matrix.size(); ++i) {
-        if (qAbs(matrix[i][col]) > qAbs(matrix[pivotRow][col])) {
+        double absVal = std::abs(matrix[i][col]);
+        if (absVal > maxAbsVal) {
+            maxAbsVal = absVal;
             pivotRow = i;
         }
     }
     return pivotRow;
+}
+
+// Check if the system has no solutions
+bool MainWindow::has_NO_Solution(const QVector<QVector<double>>& matrix) {
+    for (const auto& row : matrix) {
+        bool allZeros = std::all_of(row.begin(), row.end() - 1, [](double val) { return std::abs(val) < 1e-10; });
+        if (allZeros && std::abs(row.back()) > 1e-10) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Check if the system has infinite solutions
+bool MainWindow::has_Infinite_Solution(const QVector<QVector<double>>& matrix) {
+    for (const auto& row : matrix) {
+        bool allZeros = std::all_of(row.begin(), row.end() - 1, [](double val) { return std::abs(val) < 1e-10; });
+        if (allZeros && std::abs(row.back()) < 1e-10) {
+            return true;
+        }
+    }
+    return false;
 }
