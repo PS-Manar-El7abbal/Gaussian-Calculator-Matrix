@@ -35,6 +35,7 @@ private:
     int findPivotRow(const QVector<QVector<double>>& matrix, int row, int col); // Find the pivot row for Gaussian elimination
     bool inverseMatrix(const QVector<QVector<double>>& matrix, QVector<QVector<double>>& inverse);
     void solvebyInverse(QVector<QVector<double>>& matrix, QVector<double>& sol);
+
 };
 
 #endif // MAINWINDOW_H
