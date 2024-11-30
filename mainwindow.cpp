@@ -270,18 +270,77 @@ void MainWindow::backSubstitution(QVector<QVector<double>>& matrix, QVector<doub
     }
 }
 
-// Function to calculate the inverse of matrix A
+
+void MainWindow::on_solveButton_clicked() {
+    int rows = ui->tableWidget->rowCount();
+    int cols = ui->tableWidget->columnCount();
+
+    if (rows < 2 || cols < 2) {
+        displaySpecialMessage("Matrix dimensions must be at least 2x2.");
+        return;
+    }
+
+    QVector<QVector<double>> matrix(rows, QVector<double>(cols - 1));
+    QVector<double> constants(rows);
+
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols - 1; ++j) {
+            QTableWidgetItem* item = ui->tableWidget->item(i, j);
+            matrix[i][j] = item ? item->text().toDouble() : 0.0;
+        }
+        constants[i] = ui->tableWidget->item(i, cols - 1)->text().toDouble();
+    }
+
+    ui->outputTextEdit->clear();
+    printMatrixToUI(matrix, "Initial Matrix:");
+
+    QVector<double> solution;
+
+    QString method = ui->comboBox->currentText();
+
+    if (method == "Solve by Gaussian") {
+        gaussianElimination(matrix, solution);
+    } else if (method == "Solve by Gauss-Jordan") {
+        gaussJordanElimination(matrix, solution);
+    } else if (method == "Solve using inverse matrix") {
+        QVector<QVector<double>> inverse;
+        if (!inverseMatrix(matrix, inverse)) {
+            displaySpecialMessage("Matrix is singular, so the system has no unique solution.");
+            return;
+        }
+        // Compute the solution using the inverse matrix
+        solution.resize(rows);
+        for (int i = 0; i < rows; ++i) {
+            solution[i] = 0;
+            for (int j = 0; j < rows; ++j) {
+                solution[i] += inverse[i][j] * constants[j];
+            }
+        }
+        // Output the solution
+        ui->outputTextEdit->append("<b>Solution:</b>");
+        for (int i = 0; i < rows; ++i) {
+            QString solutionStr = QString("x%1 = %2").arg(i + 1).arg((std::abs(solution[i]) < 1e-10 ? 0.0 : solution[i]), 0, 'f', 2);
+            ui->outputTextEdit->append("<i>" + solutionStr + "</i>");
+        }
+    } else {
+        displaySpecialMessage("Unknown method selected.");
+        return;
+    }
+}
+
+
 bool MainWindow::inverseMatrix(const QVector<QVector<double>>& matrix, QVector<QVector<double>>& inverse) {
     int n = matrix.size();
     inverse = matrix;  // Start with a copy of the input matrix
 
-    // Create an identity matrix of size n
     QVector<QVector<double>> identity(n, QVector<double>(n, 0.0));
     for (int i = 0; i < n; ++i) {
         identity[i][i] = 1.0;
     }
 
-    // Gaussian elimination to create row echelon form
+    printMatrixToUI(inverse, "Initial Matrix for Inversion:");
+    printMatrixToUI(identity, "Initial Identity Matrix:");
+
     for (int i = 0; i < n; ++i) {
         int pivotRow = i;
         for (int j = i + 1; j < n; ++j) {
@@ -291,31 +350,34 @@ bool MainWindow::inverseMatrix(const QVector<QVector<double>>& matrix, QVector<Q
         }
 
         if (qAbs(inverse[pivotRow][i]) < 1e-10) {
-            return false;  // Singular matrix (not invertible)
+            displaySpecialMessage("Matrix is singular, cannot find inverse.");
+            return false;
         }
 
-        // Swap rows
-        std::swap(inverse[i], inverse[pivotRow]);
-        std::swap(identity[i], identity[pivotRow]);
+        swapRows(inverse, i, pivotRow);
+        swapRows(identity, i, pivotRow);
+        printMatrixToUI(inverse, QString("Swapped Rows %1 and %2").arg(i + 1).arg(pivotRow + 1));
+        printMatrixToUI(identity, "Updated Identity Matrix:");
 
-        // Normalize pivot row
         double pivot = inverse[i][i];
         for (int j = 0; j < n; ++j) {
             inverse[i][j] /= pivot;
             identity[i][j] /= pivot;
         }
+        printMatrixToUI(inverse, QString("Normalized Row %1").arg(i + 1));
+        printMatrixToUI(identity, "Updated Identity Matrix:");
 
-        // Eliminate below pivot
         for (int j = i + 1; j < n; ++j) {
             double factor = inverse[j][i];
             for (int k = 0; k < n; ++k) {
                 inverse[j][k] -= factor * inverse[i][k];
                 identity[j][k] -= factor * identity[i][k];
             }
+            printMatrixToUI(inverse, QString("Eliminated Row %1 using Row %2").arg(j + 1).arg(i + 1));
+            printMatrixToUI(identity, "Updated Identity Matrix:");
         }
     }
 
-    // Back substitution to create reduced row echelon form
     for (int i = n - 1; i >= 0; --i) {
         for (int j = i - 1; j >= 0; --j) {
             double factor = inverse[j][i];
@@ -323,21 +385,22 @@ bool MainWindow::inverseMatrix(const QVector<QVector<double>>& matrix, QVector<Q
                 inverse[j][k] -= factor * inverse[i][k];
                 identity[j][k] -= factor * identity[i][k];
             }
+            printMatrixToUI(inverse, QString("Back Substitution on Row %1 using Row %2").arg(j + 1).arg(i + 1));
+            printMatrixToUI(identity, "Updated Identity Matrix:");
         }
     }
 
-    // Copy the result into inverse matrix
     inverse = identity;
+    printMatrixToUI(inverse, "Final Inverted Matrix:");
     return true;
 }
 
 
-// Function to solve the system using the inverse of A
+
 void MainWindow::solvebyInverse(QVector<QVector<double>>& inverse, QVector<double>& sol) {
     int rows = ui->tableWidget->rowCount();
     int cols = ui->tableWidget->columnCount();
 
-    // Ensure that the matrix is square (number of rows == number of columns)
     if (rows != cols - 1) {
         displaySpecialMessage("The system is not a square system. Inverse can't be calculated.");
         return;
@@ -346,7 +409,6 @@ void MainWindow::solvebyInverse(QVector<QVector<double>>& inverse, QVector<doubl
     QVector<QVector<double>> matrix(rows, QVector<double>(cols - 1));
     QVector<double> constants(rows);
 
-    // Populate the matrix and the constants vector from the table
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols - 1; ++j) {
             matrix[i][j] = ui->tableWidget->item(i, j)->text().toDouble();
@@ -354,15 +416,13 @@ void MainWindow::solvebyInverse(QVector<QVector<double>>& inverse, QVector<doubl
         constants[i] = ui->tableWidget->item(i, cols - 1)->text().toDouble();
     }
 
-    QVector<QVector<double>> inverse;
-    bool invertible = inverseMatrix(matrix,inverse);  // Compute the inverse of the matrix
+    bool invertible = inverseMatrix(matrix, inverse);  // No redefinition error.
 
     if (!invertible) {
         displaySpecialMessage("Matrix is singular, so the system has no unique solution.");
         return;
     }
 
-    // Multiply the inverse matrix with the constants vector to get the solution
     QVector<double> solution(rows);
     for (int i = 0; i < rows; ++i) {
         solution[i] = 0;
@@ -371,14 +431,27 @@ void MainWindow::solvebyInverse(QVector<QVector<double>>& inverse, QVector<doubl
         }
     }
 
-    // Output the solution
     ui->outputTextEdit->append("<b>Solution:</b>");
     for (int i = 0; i < rows; ++i) {
-        QString solutionStr = QString("x%1 = %2").arg(i + 1).arg((std::abs(solution[i]) < 1e-10 ? 0.0 : solution[i]), 0, 'f', 2);
+        QString solutionStr = QString("x%1 = %2")
+        .arg(i + 1)
+            .arg((std::abs(solution[i]) < 1e-10 ? 0.0 : solution[i]), 0, 'f', 2);
         ui->outputTextEdit->append("<i>" + solutionStr + "</i>");
     }
 }
 
+
+
+// Find the pivot row for Gaussian elimination
+int MainWindow::findPivotRow(const QVector<QVector<double>>& matrix, int row, int col) {
+    int pivotRow = row;
+    for (int i = row + 1; i < matrix.size(); ++i) {
+        if (qAbs(matrix[i][col]) > qAbs(matrix[pivotRow][col])) {
+            pivotRow = i;
+        }
+    }
+    return pivotRow;
+}
 
 // Destructor
 MainWindow::~MainWindow() {
